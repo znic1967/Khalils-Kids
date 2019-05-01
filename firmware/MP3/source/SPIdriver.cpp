@@ -2,7 +2,7 @@
 #include "utility/time.hpp"
 #include "../../library/L0_LowLevel/LPC40xx.h"
 #include "../../library/L0_LowLevel/interrupt.hpp"
-#include "Part1.h"
+#include "SPIdriver.h"
 
 bool LabSpi::Initialize(uint8_t data_size_select, FrameModes format, uint8_t divide)
 {

@@ -1,19 +1,19 @@
-#ifndef VS1053_H_
-#define VS1053_H_
+#pragma once
 
-#include "vs10xx_uc.h"
-#include "LabSPI0.h"
+//#include "vs10xx_uc.h"
+#include "SPIDriver.h"
 #include "GPIOdriver.h"
 #include <FreeRTOS.h>
 #include "task.h"
-#include "storage.hpp"
+//#include "storage.hpp"
 #include <stdio.h>
 #include <string.h>
 
 
 class VS1053 {
 public:
-    void init(LPC1758_GPIO_Type DREQ, LPC1758_GPIO_Type _CS, LPC1758_GPIO_Type _DCS);
+    void Initialize(uint8_t dreqPin, uint8_t dreqPort, 
+    uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin);
     void spiwrite(uint8_t c);
     void spiwrite(uint8_t *c, uint16_t num);
     uint8_t spiread(void);
@@ -32,5 +32,3 @@ public:
     LabSpi SPI;
     uint8_t volume;
 };
-
-#endif /* VS1053_H_ */

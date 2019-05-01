@@ -4,24 +4,24 @@
 #include "SPIdriver.h"
 
 void VS1053::Initialize(uint8_t dreqPin, uint8_t dreqPort, 
-Luint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin,)
+uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
 {
      DREQ = new LabGPIO(dreqPort, dreqPin);
-     DREQ->setAsInput();
+     DREQ->SetAsInput();
      xCS  = new LabGPIO(csPort, csPin);
-     xCS->setAsOutput();
+     xCS->SetAsOutput();
      xCS->setHigh();
      xDCS = new LabGPIO(dcsPort, dcsPin);
-     xDCS->setAsOutput();
+     xDCS->SetAsOutput();
      xDCS->setHigh();
      //SPI0.initialize(8, LabSpi0::SPI, 17);
-     SPI0.Initialize(8, LabSpi::SPI, 8);
+     SPI.Initialize(8, LabSpi::SPI, 8);
 }
 
 uint8_t VS1053::spiread(void)
 {
     //return SPI0.transfer(0x00);
-    return SPI0.transfer(0x00);
+    return SPI.transfer(0x00);
 }
 
 uint16_t VS1053::sciRead(uint8_t addr) {
@@ -58,7 +58,7 @@ void VS1053::spiwrite(uint8_t *c, uint16_t num)
     while (num--)
     {
       //SPI0.transfer(c[0]);
-      SPI.transfer(c[0]);
+      SPI.Transfer(c[0]);
       c++;
     }
 }
