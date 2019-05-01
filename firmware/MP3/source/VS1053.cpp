@@ -10,10 +10,10 @@ uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
      DREQ->SetAsInput();
      xCS  = new LabGPIO(csPort, csPin);
      xCS->SetAsOutput();
-     xCS->setHigh();
+     xCS->SetHigh();
      xDCS = new LabGPIO(dcsPort, dcsPin);
      xDCS->SetAsOutput();
-     xDCS->setHigh();
+     xDCS->SetHigh();
      //SPI0.initialize(8, LabSpi0::SPI, 17);
      SPI.Initialize(8, LabSpi::SPI, 8);
 }
@@ -21,30 +21,30 @@ uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
 uint8_t VS1053::spiread(void)
 {
     //return SPI0.transfer(0x00);
-    return SPI.transfer(0x00);
+    return SPI.Transfer(0x00);
 }
 
 uint16_t VS1053::sciRead(uint8_t addr) {
   uint16_t data;
-  xCS->setLow();
+  xCS->SetLow();
   spiwrite(0x03);
   spiwrite(addr);
   vTaskDelay(10);
   data = spiread();
   data <<= 8;
   data |= spiread();
-  xCSS->setHigh();
+  xCS->SetHigh();
   return data;
 }
 
 void VS1053::sciWrite(uint8_t addr, uint16_t data)
 {
-    _CS->setLow();
+    xCS->SetLow();
     spiwrite(0x02);
     spiwrite(addr);
     spiwrite(data >> 8);
     spiwrite(data & 0xFF);
-    _CS->setHigh();
+    xCS->SetHigh();
 }
 
 void VS1053::spiwrite(uint8_t c)
@@ -76,7 +76,7 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   sciWrite(SCI_MODE, mode);
 
   while (DREQ->read()==0);
-  xDCS->setLow();
+  xDCS->SetLow();
   spiwrite(0x53);
   spiwrite(0xEF);
   spiwrite(0x6E);
@@ -85,9 +85,9 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   spiwrite(0x00);
   spiwrite(0x00);
   spiwrite(0x00);
-  xDCS->setHigh();
+  xDCS->SetHigh();
   vTaskDelay(500);
-  xDCS->setLow();
+  xDCS->SetLow();
   spiwrite(0x45);
   spiwrite(0x78);
   spiwrite(0x69);
@@ -96,7 +96,7 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   spiwrite(0x00);
   spiwrite(0x00);
   spiwrite(0x00);
-  xDCS->setHigh();
+  xDCS->SetHigh();
   vTaskDelay(500);
 }
 
