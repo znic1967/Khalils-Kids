@@ -3,6 +3,14 @@
 #include "GPIOdriver.h"
 #include "SPIdriver.h"
 
+#define SCI_MODE 0x00
+#define SCI_VOL  0x08
+#define SM_RESET (1 << 2)
+
+//xDREQ = 4_28
+//xCS = 0_6
+//xDCS = 0_8
+
 void VS1053::Initialize(uint8_t dreqPin, uint8_t dreqPort, 
 uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
 {
@@ -75,7 +83,7 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   mode |= 0x0020;
   sciWrite(SCI_MODE, mode);
 
-  while (DREQ->read()==0);
+  while (DREQ->Read() == LabGPIO::State::kLow);
   xDCS->SetLow();
   spiwrite(0x53);
   spiwrite(0xEF);

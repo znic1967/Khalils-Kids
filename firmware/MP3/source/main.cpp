@@ -1,7 +1,7 @@
 #include <project_config.hpp>
-#include <cstdint>
-#include <fstream>
-#include <iostream>
+// #include <cstdint>
+// #include <fstream>
+// #include <iostream>
 
 #include <FreeRTOS.h>
 #include "task.h"
@@ -22,8 +22,14 @@
 #include "L3_Application/commands/lpc_system_command.hpp"
 #include "../../library/third_party/fatfs/source/ff.h"
 
+#include "VS1053.h"
+
+
 int main(void)
 {
   //Play Music
+  VS1053 Decoder;
+  Decoder.Initialize(4,28,0,6,0,8);
+  Decoder.sineTest(200,200);
   return 0;
 }
