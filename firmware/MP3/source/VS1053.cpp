@@ -7,11 +7,15 @@
 #define SCI_VOL  0x08
 #define SM_RESET (1 << 2)
 
-//xDREQ = 4_28
-//xCS = 0_6
-//xDCS = 0_8
+//SCLK = 1_0 ch0
+//MOSI = 1_1 ch1
+//MISO = 1_4 ch2
+//xDREQ = 4_28 ch3
+//xCS = 0_6 ch4
+//xDCS = 0_8 ch5
 
-void VS1053::Initialize(uint8_t dreqPin, uint8_t dreqPort, 
+
+void VS1053::Initialize(uint8_t dreqPort, uint8_t dreqPin, 
 uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
 {
      DREQ = new LabGPIO(dreqPort, dreqPin);
