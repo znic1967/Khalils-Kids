@@ -15,6 +15,8 @@
 //xDCS = 0_8 ch5
 
 
+//Note: s delays converted to normal delays
+
 void VS1053::Initialize(uint8_t dreqPort, uint8_t dreqPin, 
 uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
 {
@@ -28,6 +30,7 @@ uint8_t csPort, uint8_t csPin, uint8_t dcsPort, uint8_t dcsPin)
      xDCS->SetHigh();
      //SPI0.initialize(8, LabSpi0::SPI, 17);
      SPI.Initialize(8, LabSpi::SPI, 8);
+     setVolume(100);
 }
 
 uint8_t VS1053::spiread(void)
@@ -37,11 +40,13 @@ uint8_t VS1053::spiread(void)
 }
 
 uint16_t VS1053::sciRead(uint8_t addr) {
+  LOG_INFO("SCI Read");
   uint16_t data;
   xCS->SetLow();
   spiwrite(0x03);
   spiwrite(addr);
-  vTaskDelay(10);
+  //LOG_INFO("SPIwrite death");
+  Delay(10);
   data = spiread();
   data <<= 8;
   data |= spiread();
@@ -78,17 +83,21 @@ void VS1053::spiwrite(uint8_t *c, uint16_t num)
 void VS1053::soft_reset(void){
     uint16_t mode = sciRead(SCI_MODE);
     mode |= SM_RESET;
+    LOG_INFO("mode = 0x%X", mode);
     sciWrite(SCI_MODE, mode);
 }
 
 void VS1053::sineTest(uint8_t n, uint16_t ms) {
+  LOG_INFO("Beginning of SINE TEST BOI");
   soft_reset();
+  //LOG_INFO("Death on SCI Read");
   uint16_t mode = sciRead(SCI_MODE);
-  mode |= 0x0020;
+  mode |= 0x0020; //allowing SDI tests
   sciWrite(SCI_MODE, mode);
-
-  while (DREQ->Read() == LabGPIO::State::kLow);
-  xDCS->SetLow();
+  //LOG_INFO("Boutta Hit Loop");
+  while (DREQ->Read() == LabGPIO::State::kLow); //Wait until CS is deasserted.
+   xDCS->SetLow();
+  // LOG_INFO("CS went Low");
   spiwrite(0x53);
   spiwrite(0xEF);
   spiwrite(0x6E);
@@ -98,7 +107,7 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   spiwrite(0x00);
   spiwrite(0x00);
   xDCS->SetHigh();
-  vTaskDelay(500);
+  Delay(500);
   xDCS->SetLow();
   spiwrite(0x45);
   spiwrite(0x78);
@@ -109,7 +118,7 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   spiwrite(0x00);
   spiwrite(0x00);
   xDCS->SetHigh();
-  vTaskDelay(500);
+  Delay(500);
 }
 
 void VS1053::sendVolume(uint8_t left, uint8_t right) {
@@ -119,7 +128,7 @@ void VS1053::sendVolume(uint8_t left, uint8_t right) {
   volume_to_send |= right;
   sciWrite(SCI_VOL, volume_to_send);
 }
-void VS1053::setVolume(uint8_t v)
+void VS1053::setVolume(uint8_t v) //V {0, 100}
 {
     volume = v;
     float scaled_volume = 254.0 - 154.0*(volume/100.0) - 100.0;

@@ -37,12 +37,20 @@ int main(void)
 {
   //Play Music
   VS1053 Decoder;
+  LabSpi SPIObj;
+  LabGPIO CS(0,6);
 
   Decoder.Initialize(4,28,0,6,0,8);
   Decoder.sineTest(200,200);
- // SpKaiKai.Initialize(8,LabSpi::FrameModes::SPI, 8);
-  //SpKaiKai.Transfer(0x12);
-  //Decoder.sineTest(200,200);
 
+  // SPIObj.Initialize(8, LabSpi::SPI, 8);
+  // CS.SetAsOutput();
+  // CS.SetLow();
+  // SPIObj.Transfer(0x12);
+  // CS.SetHigh();
+  // Delay(1);
+  // CS.SetLow();
+  // SPIObj.Transfer(0x34);
+  // CS.SetHigh();
   return 0;
 }
