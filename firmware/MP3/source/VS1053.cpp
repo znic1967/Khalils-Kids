@@ -119,6 +119,7 @@ void VS1053::sineTest(uint8_t n, uint16_t ms) {
   spiwrite(0x00);
   xDCS->SetHigh();
   Delay(500);
+  LOG_INFO("SINE TEST COMPLETE");
 }
 
 void VS1053::sendVolume(uint8_t left, uint8_t right) {

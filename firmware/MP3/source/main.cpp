@@ -42,6 +42,7 @@ int main(void)
 
   Decoder.Initialize(4,28,0,6,0,8);
   Decoder.sineTest(200,200);
+  LOG_INFO("Done with the goods");
 
   // SPIObj.Initialize(8, LabSpi::SPI, 8);
   // CS.SetAsOutput();
