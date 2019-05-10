@@ -32,26 +32,33 @@ LabSpi SpKaiKai;
 //xDREQ = 4_28 ch3
 //xCS = 0_6 ch4
 //xDCS = 0_8 ch5
+//RST - 0_26 ch6
 
 int main(void)
 {
   //Play Music
   VS1053 Decoder;
   LabSpi SPIObj;
-  LabGPIO CS(0,6);
+   
 
-  Decoder.Initialize(4,28,0,6,0,8);
+  Decoder.Initialize(4,28,0,6,0,8,0,26);
   Decoder.sineTest(200,200);
-  LOG_INFO("Done with the goods");
 
-  // SPIObj.Initialize(8, LabSpi::SPI, 8);
+  //SPI Test Code
+  // LabGPIO CS(0,6); 
   // CS.SetAsOutput();
+  // CS.SetHigh();
+  // SPIObj.Initialize(8, LabSpi::SPI, 4);
   // CS.SetLow();
   // SPIObj.Transfer(0x12);
   // CS.SetHigh();
   // Delay(1);
   // CS.SetLow();
   // SPIObj.Transfer(0x34);
+  // CS.SetHigh();
+  // Delay(1);
+  // CS.SetLow();
+  // SPIObj.Transfer(0x56);
   // CS.SetHigh();
   return 0;
 }
