@@ -1,37 +1,38 @@
 #pragma once 
 
 #include <cstdint>
-#include "../../library/L0_LowLevel/LPC40xx.h"
-#include "../../library/L0_LowLevel/interrupt.hpp"
+#include "L0_LowLevel/LPC40xx.h"
+#include "L0_LowLevel/interrupt.hpp"
   
 class LabGPIO
 {
     public:
         enum class Direction : uint8_t
         {
-            kInput  = 0,
-            kOutput = 1
+          kInput  = 0,
+          kOutput = 1
         };
         enum class State : uint8_t
         {
-            kLow  = 0,
-            kHigh = 1
+          kLow  = 0,
+          kHigh = 1
         };
         enum class Edge
         {
-            kNone = 0,
-            kRising,
-            kFalling,
-            kBoth
+          kNone = 0,
+          kRising,
+          kFalling,
+          kBoth
         };
-
-
+        static constexpr size_t kPorts = 2;
+        static constexpr size_t kPins = 32; 
         /// You should not modify any hardware registers at this point
         /// You should store the port and pin using the constructor.
         ///
         /// @param port - port number between 0 and 5
         /// @param pin - pin number between 0 and 32
-        /*constexpr*/ LabGPIO(uint8_t portGPIO, uint8_t pinGPIO);
+        LabGPIO(uint8_t port, uint32_t pin);
+        static void Init();
         /// Sets this GPIO as an input
         void SetAsInput();
         /// Sets this GPIO as an output
@@ -56,29 +57,23 @@ class LabGPIO
         ///
         /// @return level of pin high => true, low => false
         bool ReadBool();
-        uint8_t getPort();
-        uint8_t getPin();
-
-        static constexpr size_t kPorts = 2;
-        static constexpr size_t kPins = 32; 
         // This handler should place a function pointer within the lookup table for 
         // the GpioInterruptHandler() to find.
         //
         // @param isr  - function to run when the interrupt event occurs.
         // @param edge - condition for the interrupt to occur on.
         void AttachInterruptHandler(IsrPointer isr, Edge edge);
+        // Register GPIO_IRQn here
         static void EnableInterrupts();
-
-        void AdestoSelect();
-        void AdestoDeselect();
-
     private:
-        uint8_t port;
-     	uint8_t pin;
-     	LPC_GPIO_TypeDef *gpioDef;
         /// port, pin and any other variables should be placed here.
         /// NOTE: Pin state should NEVER be cached! Always check the hardware
         ///       registers for the actual value of the pin.
+        uint8_t _port;
+        uint32_t _pin;
+        volatile uint32_t *IOxIntEnR;
+        volatile uint32_t *IOxIntEnF;
+        LPC_GPIO_TypeDef *LPC_GPIOx;
         // Statically allocated a lookup table matrix here of function pointers 
         // to avoid dynamic allocation.
         // 
@@ -102,6 +97,4 @@ class LabGPIO
         //  - NOTE that your code needs to be able to handle two GPIO interrupts 
         //    occurring at the same time.
         static void GpioInterruptHandler();
-        // Register GPIO_IRQn here
-        
 };
