@@ -190,10 +190,13 @@ void VS1053::spiwrite(uint8_t *c, uint16_t num)
 }
 
 void VS1053::soft_reset(void){
+
+    
     uint16_t mode = sciRead(RegisterMap[MODE].reg_num);
     mode |= modeReg::SM_RESET;
     LOG_INFO("mode = 0x%X", mode);
     sciWrite(RegisterMap[MODE].reg_num, mode);
+    //sciRead(RegisterMap[MODE].reg_num); //Test remove later
 }
 
 void VS1053::sineTest(uint8_t n, uint16_t ms) {
