@@ -20,6 +20,56 @@
 #include <cinttypes>
 #include "third_party/fatfs/source/ff.h"
 
+#define START_TIME 0
+#define END_TIME 1
+#define DEBOUNCE_TIME 5000
+const uint32_t STACK_SIZE = 512;
+
+LabGPIO LED0(1, 18);
+LabGPIO LED1(1, 24);
+LabGPIO LED2(1, 26);
+LabGPIO LED3(2, 3);
+OledTerminal oled;
+uint8_t start;
+uint8_t end;
+uint8_t file_num;
+ID3v1_t mp3_files[100];
+int lineNum;
+int lines;
+char position[50] = "main";
+int volumeLevel = 0;
+int trebbleLevel = 0;
+int bassLevel = 0;
+ID3v1_t currentSong;
+MenuState currentState = MenuState::kSongList;
+VS1003 Decoder;
+
+LabGPIO IR(0, 6);      //Port: 0_1
+LabGPIO SW2(0, 30);
+volatile uint32_t low = 0;
+QueueHandle_t buttonQueueHandle;
+
+void toggleLEDState(LabGPIO *gpio_pin);
+void button0ISR();
+void button1ISR();
+
+void printMetaData(ID3v1_t mp3);
+void printFilesToScreen(ID3v1_t mp3);
+void printMultipleToScreen(ID3v1_t mp3_files[], int start_index, int end_index);7
+
+void moveMenuDown(ID3v1_t mp3_files[]);
+void moveMenuUp(ID3v1_t mp3_files[]);
+FRESULT scan_files (char* path, char fileName[10][256], ID3v1_t mp3_files[], uint8_t* file_count);
+
+void printMainMenu();
+void backTracker();
+void selectTracker();
+void moveCursorUp();
+void moveCursorDown();
+void readIR_ISR();
+
+void vMenuTask(void *pvParameter);
+
 typedef union
 {
     uint8_t buffer[128];
@@ -37,250 +87,257 @@ typedef union
     } __attribute__((packed));
 } ID3v1_t;
 
-// Declared globally to be used in ISR functions
-LabGPIO LED0(1, 18);
-LabGPIO LED1(1, 24);
-LabGPIO LED2(1, 26);
-LabGPIO LED3(2, 3);
-OledTerminal oled_terminal;
-uint8_t start;
-uint8_t end;
-uint8_t file_num;
-ID3v1_t mp3_files[100];
-int line_num;
-int lines;
-char position[50] = "main";
-ID3v1_t currentSong;
-
-void toggleLEDState(LabGPIO *gpio_pin);
-void button0ISR();
-void button1ISR();
-
-void printMetaData(ID3v1_t mp3);
-void printFilesToScreen(ID3v1_t mp3);
-void printMultipleToScreen(ID3v1_t mp3_files[], int start_index, int end_index);
-void moveMenuDown(ID3v1_t mp3_files[]);
-void moveMenuUp(ID3v1_t mp3_files[]);
-FRESULT scan_files (char* path, char fileName[10][256], ID3v1_t mp3_files[], uint8_t* file_count);
-
-void printMainMenu();
-void backTracker();
-void selectTracker();
-void moveCursorUp();
-void moveCursorDown();
-
-
-void toggleLEDState(LabGPIO *gpio_pin)
+enum class IrOpcode : uint16_t
 {
-    if(gpio_pin->ReadBool())
-    {
-        gpio_pin->SetLow();
-    }
-    else
-    {
-        gpio_pin->SetHigh();
-    }
+    kPower        = 0x0778,
+    kSource       = 0x5728,
+    kVolumeUp     = 0x7708,
+    kVolumeDown   = 0x0F70,
+    kMute         = 0x4738,
+    kReplay       = 0x48B7,
+    kRewind       = 0x6897,
+    kPlayPause    = 0x28D7,
+    kFastFoward   = 0x18E7,
+    kSoundEffect  = 0x6F10,
+    kSound        = 0x40BF,
+    kBluetooth    = 0x5CA3,
+    kLeft         = 0x06F9,
+    kRight        = 0x46B9,
+    kSoundControl = 0x32CD
 }
-//Select
-void button0ISR()
+
+enum class MenuState : int
 {
-    LOG_INFO("button 0 ISR!");
-    toggleLEDState(&LED0);
-    selectTracker();
+  kSongList   = 0,
+  kNowPlaying = 1,
+  kSettings   = 3,
+  kTrebble    = 4,
+  kBass       = 5
 }
-//Up
-void button1ISR()
-{
-    LOG_INFO("button 1 ISR!");
-    toggleLEDState(&LED1);
-    moveMenuUp(mp3_files);
-    moveCursorUp();
-}
-//Down
-void button2ISR()
-{
-    LOG_INFO("button 2 ISR!");
-    toggleLEDState(&LED2);
-    moveMenuDown(mp3_files);
-    moveCursorDown();
-}
-//Back
-void button3ISR()
-{
-    LOG_INFO("button 3 ISR!");
-    toggleLEDState(&LED3);
-    backTracker();
-}
+
+//make lookup table for asktriskkkk
 
 int main(void)
 {
   line_num = 0;
   lines = 0;
-  //   //Play Music
-  // LabGPIO XDCS(1, 30);
-  // LabGPIO XCS(0, 6);
-  // LabGPIO XRST(0, 25);
-  // LabGPIO DREQ(1, 23);
+  uint16_t result;
+  float voltage;
   
-  // // SSP1 PINS
+  IR.Init();
+  IR.EnableInterrupts();
+  IR.SetAsInput();
+  IR.AttachInterruptHandler(readIR_ISR, LabGPIO::Edge::kBoth);
 
-  // // SCLK P0.7
-  // // MOSI 0.9
-  // // MISO 0.8
+  SW2.AttachInterruptHandler(readIR_ISR, LabGPIO::Edge::kBoth);
+  RegisterIsr(GPIO_IRQn, readIR_ISR);
 
-  // VS1003 Decoder(&XDCS, &XCS, &XRST, &DREQ);
+  Adc ADC(Adc::Channel::kChannel4);
+  ADC.Initialize();
+  ADC.BurstMode(true);
 
-  // Decoder.init();
+  LOG_INFO("Starting Oled...");
+  oled_terminal.Initialize();
 
-  // Decoder.sineTest(200);
+  Decoder.setVolume(5);  // init volume
+  xTaskCreate(
+          vMenuTask,          /* Function that implements the task. */
+          "vMenuTask",        /* Text name for the task. */
+          STACK_SIZE,                     /* Stack size in words, not bytes. */
+          NULL,     /* Parameter passed into the task. */
+          3,                              /* Priority at which the task is created. */
+          NULL );                         /* Used to pass out the created task's handle. */
+  buttonQueueHandle = xQueueCreate(10, sizeof(uint16_t));
 
-    LOG_INFO("Setting up Interrupts...");
-    LabGPIO::Init();
-    LabGPIO::EnableInterrupts();
-    LED0.SetAsOutput();
-    LED1.SetAsOutput();
+  //Menu Start
+  //**print song list - this is our starting point
+  //***********
 
-    LabGPIO button0(0, 16);
-    button0.SetAsInput();
-    button0.AttachInterruptHandler(button0ISR, LabGPIO::Edge::kFalling);
-
-    LabGPIO button1(0, 17);
-    button1.SetAsInput();
-    button1.AttachInterruptHandler(button1ISR, LabGPIO::Edge::kFalling);
-
-    LabGPIO button2(0, 22);
-    button2.SetAsInput();
-    button2.AttachInterruptHandler(button2ISR, LabGPIO::Edge::kFalling);
-
-    LabGPIO button3(0, 0);
-    button3.SetAsInput();
-    button3.AttachInterruptHandler(button3ISR, LabGPIO::Edge::kFalling);
-
-    Adc ADC(Adc::Channel::kChannel4);
-    ADC.Initialize();
-    ADC.BurstMode(true);
-
-    LOG_INFO("Starting Oled...");
-    oled_terminal.Initialize();
-    printMainMenu();
-
-    uint16_t result;
-    float voltage;
-
-    // LOG_INFO("Mounting filesystem...");
-   
-    // FATFS fs;
-    // FRESULT res;
-    // char buff[256];
-    // char fileName[100][256];
-    // file_num = 0;
-    
-
-    // res = f_mount(&fs, "", 1);
-    
-
-    // if (res == FR_OK) {
-    //     LOG_INFO("File System Mounted Succesfully!");
-    //     strcpy(buff, "/");
-    //     res = scan_files(buff, fileName, mp3_files, &file_num);
-    // }
-    // else {
-    //     LOG_ERROR("ERROR");
-    // }
-    ID3v1_t Song1;
-    ID3v1_t Song2;
-    ID3v1_t Song3;
-
-    char name[30]= "Song1";
-
-    uint8_t p[30];
-    p = reinterpret_cast< uint8_t*>(name);
-    Song1.title = p;
+  // LOG_INFO("Mounting filesystem...");
   
-    LOG_INFO("Song title: %s", Song1.title);
+  // FATFS fs;
+  // FRESULT res;
+  // char buff[256];
+  // char fileName[100][256];
+  // file_num = 0;
+  
 
-    start = 0;
-    end = start + 4;
-    while(1)
-    {
-        // for(int i = 0; i < file_num; i++)
-        // {
-        //     moveMenuDown(mp3_files);
-        //     Delay(1000);
-        // }
-        // for(int i = 0; i < file_num; i++)
-        // {
-        //     moveMenuUp(mp3_files);
-        //     Delay(1000);
-        // }
-        // // moving down
-        // for(int i = 6; i < file_count - 1; i++)
-        // {
-        //     // move down 1
-        //     start = i;
-        //     end = i + 2;
-        //     if((i + 2) > (file_count - 1))
-        //     {
-        //         start = file_count - 2;
-        //         end = file_count - 1;
-        //     }
-        //     printMultipleToScreen(mp3_files, start, end);
-        //     Delay(1000);
-        // }
+  // res = f_mount(&fs, "", 1);
+  
 
-        // // moving up 
-        // for(int i = file_count - 2; i >= 0; i--)
-        // {
-        //     start = i;
-        //     end = i + 2;
-        //     if((i + 2) > (file_count - 1)){
-        //         start = file_count - 3;
-        //         end = file_count - 1;
-        //     }
-        //     printMultipleToScreen(mp3_files, start, end);
-        //     Delay(1000);
-        // }
-        continue;
-    }
-    
+  // if (res == FR_OK) {
+  //     LOG_INFO("File System Mounted Succesfully!");
+  //     strcpy(buff, "/");
+  //     res = scan_files(buff, fileName, mp3_files, &file_num);
+  // }
+  // else {
+  //     LOG_ERROR("ERROR");
+  // }
 
 
+  start = 0;
+  end = start + 4;
+  // while(1)
+  // {
+      // for(int i = 0; i < file_num; i++)
+      // {
+      //     moveMenuDown(mp3_files);
+      //     Delay(1000);
+      // }
+      // for(int i = 0; i < file_num; i++)
+      // {
+      //     moveMenuUp(mp3_files);
+      //     Delay(1000);
+      // }
+      // // moving down
+      // for(int i = 6; i < file_count - 1; i++)
+      // {
+      //     // move down 1
+      //     start = i;
+      //     end = i + 2;
+      //     if((i + 2) > (file_count - 1))
+      //     {
+      //         start = file_count - 2;
+      //         end = file_count - 1;
+      //     }
+      //     printMultipleToScreen(mp3_files, start, end);
+      //     Delay(1000);
+      // }
 
-    // TEST DISPLAYING VOLUME FROM POT (via ADC)
-    // while(1)
-    // {   
-    //     LOG_INFO("Converting");
-    //     result = ADC.ReadResult();
-
-    //     // voltage = Map(result, 0, 1023, 0.0f, 3.3f);
-    //     oled_terminal.printf("adc = %u\n", result);
-    //     Delay(250);
-    // }
-
-
-    // //Play Music
-    // LabGPIO XDCS(1, 30);
-    // LabGPIO XCS(0, 6);
-    // LabGPIO XRST(0, 25);
-    // LabGPIO DREQ(1, 23);
-
-    // VS1003 Decoder(&XDCS, &XCS, &XRST, &DREQ);
-
-    // Decoder.init();
-
-    // // Decoder.Initialize(4,28,0,6,0,8);
-    // // Decoder.Initialize(1,23,0,6,1,30);
-    // Decoder.sineTest(200);
-    // // SpKaiKai.Initialize(8,LabSpi::FrameModes::SPI, 8);
-    // //SpKaiKai.Transfer(0x12);
-    // //Decoder.sineTest(200,200);
+      // // moving up 
+      // for(int i = file_count - 2; i >= 0; i--)
+      // {
+      //     start = i;
+      //     end = i + 2;
+      //     if((i + 2) > (file_count - 1)){
+      //         start = file_count - 3;
+      //         end = file_count - 1;
+      //     }
+      //     printMultipleToScreen(mp3_files, start, end);
+      //     Delay(1000);
+      // }
+      //continue;
+  //}
 }
-
-
-
-
-
-
+void vMenuTask(void * pvParameter)
+{
+  uint16_t recievedButton = 0;
+  if(xQueueReceive(buttonQueueHandle, &recievedButton, portMAX_DELAY))
+  {
+     switch(opcode)
+    {
+      case kPower:
+          printf("Power\n");
+          break;
+      case kSource:
+          toggleMenu();
+          break;
+      case kVolumeUp:
+          // Volume Min = 0, Volume Max = 10
+          volumeLevel++;
+          break;
+      case kVolumeDown:
+          printf("Down\n");
+          volumeLevel--;
+          break;
+      case kMute:
+          printf("Mute\n");
+          volumeLevel = 0;
+          break;
+      case kReplay:
+          printf("Replay\n");
+          //call function to start song
+          break;
+      case kRewind:
+          printf("Rewind\n");
+          break;
+      case kPlayPause:
+          printf("Play/Pause\n");
+          //stop sending data
+          break;
+      case kFastFoward:
+          printf("Fast Foward\n");
+          break;
+      case kSoundEffect:
+          printf("Sound Effect\n");
+          break;
+      case kSound:
+          printf("Sound\n");
+          break;
+      case kBluetooth:
+          printf("Bluetooth\n");
+          break;
+      case kLeft:
+          printf("Left\n");
+          break;
+      case kRight:
+          printf("Right\n");
+          break;
+      case kSoundControl:
+          printf("Sound Control\n");
+          ToggleMenu();
+          break;
+      default:
+          printf("%04X\n", opcode);
+          break;
+    }
+  }
+}
+void ToggleMenu()
+{
+  if (currentMenu == MenuState::kSongList) //This is the state before button 
+  {
+    currentMenu = MenuState::kNowPlaying;
+    oled.Clear();
+    //print song info
+    //No cursor
+  }
+  if (currentMenu == MenuState::kNowPlaying)
+  {
+    currentMenu = MenuState::kSettings;
+    oled.Clear();
+    //print Trebble and trebble level
+    //No cursor
+  }
+  if (currentMenu == MenuState::kSettings)
+  {
+    currentMenu = MenuState::kSongList
+    oled.Clear();
+    //print Song List
+    oled.SetCursor(0, 0);
+  }
+  if (currentMenu == MenuState::kTrebble)
+  {
+    currentMenu = MenuState::kBass;
+    oled.Clear();
+    oled.printf("Bass:\nLevel: ");
+    if(bassLevel > 5) // Positive Level
+    {
+      for (int i = 0; i < 5; i++)
+      {
+        oled.printf(" ");
+      }
+      for(int i = 5; i < bassLevel; i++)
+      {
+        oled.printf("*");
+      }
+    }
+    if(bassLevel < 5)
+    {
+      int spaces = bassLevel;
+      for (int i = 0; i < bassLevel; i++)
+      {
+        oled.printf(" ");
+      }
+    }
+  }
+  if (currentMenu == MenuState::kBass)
+  {
+    currentMenu = MenuState::kTrebble;
+    oled.Clear();
+    oled.printf("Trebble:\nLevel: ");
+  }
+}
 
 FRESULT scan_files (char* path, char fileName[10][256], ID3v1_t mp3_files[], uint8_t* file_count) /* Start node to be scanned (***also used as work area***) */            
 {
@@ -367,7 +424,6 @@ void printMetaData(ID3v1_t mp3)
         mp3.header, mp3.title, mp3.artist, mp3.album, mp3.year, mp3.comment,
         mp3.zero, mp3.track, mp3.genre);
 }
-
 
 void printFilesToScreen(ID3v1_t mp3)
 {
@@ -495,9 +551,6 @@ void selectTracker()
       //Call bass down fxn
     }
   }
-
-
-
 }
 
 void moveMenuUp(ID3v1_t mp3_files[])
@@ -515,4 +568,55 @@ void moveMenuUp(ID3v1_t mp3_files[])
         start = file_num - 5;
     }
     printMultipleToScreen(mp3_files, start, end);
+}
+
+void readIR_ISR() 
+{
+    static uint8_t sample = 0;
+    static uint16_t opcode = 0;
+    static uint32_t start_time = 0;
+    static bool read_opcode = false;
+    static uint16_t prev_opcode = 0;
+    static uint64_t prev_sent_time = 0;
+    if(LPC_GPIOINT->IO0IntStatR & (1 << 6))
+    {
+        start_time = Uptime();
+    }
+    else
+    {
+        opcode = (opcode << 1) | (((Uptime() - start_time) >> 7) == 5);
+        if(opcode == 0x9E00)
+        {
+            sample = 0;
+        }
+        if(++sample == 16)
+        {
+            if(opcode == prev_opcode)
+            {
+                if (prev_sent_time + DEBOUNCE_TIME > Uptime())
+                {
+                    prev_sent_time = Uptime();
+                    xQueueSendFromIsr(&buttonQueueHandle, opcode);
+                }
+            }
+            else
+            {
+                prev_sent_time = Uptime();
+                xQueueSendFromIsr(&buttonQueueHandle, opcode);
+            }
+        }
+    }
+    LPC_GPIOINT->IO0IntClr |= (1 << 6); //Clear Int Flag
+}
+
+void toggleLEDState(LabGPIO *gpio_pin)
+{
+    if(gpio_pin->ReadBool())
+    {
+        gpio_pin->SetLow();
+    }
+    else
+    {
+        gpio_pin->SetHigh();
+    }
 }
